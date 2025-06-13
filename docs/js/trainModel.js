@@ -134,7 +134,7 @@ function oneHotEncode(label, classes) {
 }
 
 export async function predictPose(model, keypoints) {
-    if (!model || !keypoints || keypoints.length !== 34) {
+    if (!model || !keypoints || keypoints.length !== 66) {
         return "Unknown";
     }
 
