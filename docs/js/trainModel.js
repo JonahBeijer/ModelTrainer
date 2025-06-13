@@ -34,7 +34,7 @@ export async function trainModelFromFile(inputId) {
     const model = ml5.neuralNetwork({
         task: 'classification',
         debug: true,
-        inputs: 34,
+        inputs: 66,
         outputs: ['Squat', 'JumpingJack'],
         learningRate: 0.01
     });
@@ -83,7 +83,7 @@ export async function trainModel(data) {
     const model = ml5.neuralNetwork({
         task: 'classification',
         debug: true,
-        inputs: 34,
+        inputs: 66,
         outputs: 2,
         learningRate: 0.01,
     });
