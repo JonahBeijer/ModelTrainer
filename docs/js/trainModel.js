@@ -1,22 +1,83 @@
+
 export async function trainModelFromFile(inputId) {
     const file = document.getElementById(inputId).files?.[0];
-    if (!file) return alert("Upload een JSON-bestand.");
-    let data;
-    try { data = JSON.parse(await file.text()); }
-    catch { return alert("Ongeldig JSON."); }
+    if (!file) {
+        alert("Upload een JSON-bestand.");
+        return;
+    }
 
+    let allData;
+    try {
+        allData = JSON.parse(await file.text());
+    } catch {
+        alert("Ongeldig JSON-bestand.");
+        return;
+    }
+
+    // Stap 1: Schud en splits de data (80% training, 20% test)
+    allData.sort(() => Math.random() - 0.5); // Willekeurig husselen
+
+    const splitPoint = Math.floor(allData.length * 0.8);
+    const trainingData = allData.slice(0, splitPoint);
+    const testData = allData.slice(splitPoint);
+
+    console.log(`Totaal ${allData.length} voorbeelden geladen.`);
+    console.log(`--> ${trainingData.length} voor training.`);
+    console.log(`--> ${testData.length} voor testen.`);
+
+    if (testData.length === 0) {
+        alert("Te weinig data om een testset te maken. Verzamel meer voorbeelden.");
+        return;
+    }
+
+    // Stap 2: Maak het model en voeg alleen de trainingsdata toe
     const model = ml5.neuralNetwork({
-        task: 'classification', debug: true, inputs: 34, outputs: ['Squat','JumpingJack'], learningRate: 0.01
+        task: 'classification',
+        debug: true,
+        inputs: 34,
+        outputs: ['Squat', 'JumpingJack'],
+        learningRate: 0.01
     });
-    data.forEach(s => model.addData(s.keypoints, { label: s.label }));
-    await new Promise((res, rej) => model.train({epochs:50, batchSize:32}, err => err ? rej(err) : res()));
+
+    for (const item of trainingData) {
+        model.addData(item.keypoints, { label: item.label });
+    }
+
+    // Stap 3: Train het model
+    console.log("Starten met trainen...");
+    await new Promise((resolve, reject) => {
+        model.train({ epochs: 50, batchSize: 32 }, (err) => err ? reject(err) : resolve());
+    });
+    console.log("Training voltooid.");
+
+    // Stap 4: Evalueer het model met de testdata
+    console.log("Model evalueren met de testdata...");
+    let correctPredictions = 0;
+    for (const testItem of testData) {
+        // Gebruik een Promise om de asynchrone 'classify' aanroep af te wachten
+        const results = await new Promise(resolve => {
+            model.classify(testItem.keypoints, (err, res) => resolve(res));
+        });
+
+        if (results[0].label === testItem.label) {
+            correctPredictions++;
+        }
+    }
+
+    // Stap 5: Bereken en toon de accuracy
+    const accuracy = (correctPredictions / testData.length) * 100;
+    alert(`Evaluatie voltooid!\n\nAccuracy op de testset: ${accuracy.toFixed(2)}%\n(${correctPredictions} van de ${testData.length} correct voorspeld)`);
+
+    // Geef het volledig getrainde model terug
     return model;
 }
+
+
+// --- DE REST VAN JE CODE BLIJFT HETZELFDE ---
 
 export async function saveModel(model) {
     model.save('poseModel'); // download model.json + model.weights.bin
 }
-
 
 export async function trainModel(data) {
     const model = ml5.neuralNetwork({
@@ -27,30 +88,24 @@ export async function trainModel(data) {
         learningRate: 0.01,
     });
 
-    // Data checks
     data.forEach(sample => {
-
         model.addData(sample.keypoints, { label: sample.label });
     });
 
-    // Gecorrigeerde train functie
     await new Promise((resolve, reject) => {
-        model.train(
-            {
-                epochs: 50,
-                batchSize: 32,
-                callback: (epoch, loss) => {  // <-- Correcte parameter naam
-                    console.log(`Epoch ${epoch} - Loss: ${loss}`);
-                }
-            },
-            (err) => {  // <-- Callback voor training voltooiing
-                if(err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
+        model.train({
+            epochs: 50,
+            batchSize: 32,
+            callback: (epoch, loss) => {
+                console.log(`Epoch ${epoch} - Loss: ${loss}`);
             }
-        );
+        }, (err) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve();
+            }
+        });
     });
 
     return model;
@@ -62,15 +117,14 @@ function flattenKeypoints(keypoints) {
         return [];
     }
     return keypoints.reduce((acc, value, index) => {
-        if (index % 2 === 0) { // X-coördinaten (even indexen)
+        if (index % 2 === 0) {
             acc.push(value);
-        } else if (index % 2 === 1) { // Y-coördinaten (oneven indexen)
+        } else if (index % 2 === 1) {
             acc.push(value);
         }
         return acc;
     }, []);
 }
-
 
 function oneHotEncode(label, classes) {
     const encoding = Array(classes.length).fill(0);
@@ -84,17 +138,14 @@ export async function predictPose(model, keypoints) {
         return "Unknown";
     }
 
-    // Flatten de keypoints naar X, Y, Z
     const flattenedKeypoints = flattenKeypoints(keypoints);
 
-    // Controleer of er geldige keypoints zijn
     if (flattenedKeypoints.length === 0) {
         return "Unknown";
     }
 
-    // Normaliseren van de keypoints
     const max = Math.max(...flattenedKeypoints);
-    if (max === 0) { // Voorkom deling door nul
+    if (max === 0) {
         return "Unknown";
     }
     const normalizedKeypoints = flattenedKeypoints.map(value => value / max);
