@@ -106,7 +106,8 @@ async function detectPoseLoop(onPoseDetected) {
                 onPoseDetected(pose, keypoints, lowerVisible);
             }
 
-            console.log(keypoints);
+            console.log(poseData);
+
 
         }
     }
